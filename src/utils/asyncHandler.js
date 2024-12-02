@@ -1,9 +1,7 @@
-//Higher oreder function as Wraper function for the code base
+//Higher oreder function as Wraper function for the code base with promise
 
-const asyncHandler = (requestHandler) => {
-  (req, res, next) => {
-    Promise.resolve(requestHandler(req, res, next)).catch((err) => next(err));
-  };
+const asyncHandler = (requestHandler) => (req, res, next) => {
+  Promise.resolve(requestHandler(req, res, next)).catch((err) => next(err));
 };
 
 export { asyncHandler };
@@ -14,7 +12,7 @@ export { asyncHandler };
 const asyncHandler = (func) => () => {};
 const asyncHandler = (func) => async () => {}; */
 
-//Higher oreder function as Wraper function for the code base
+//Higher order function as Wraper function for the code base with async await
 
 /* const asyncHandler = (fn) => async (req, res, next) => {
   try {

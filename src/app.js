@@ -17,3 +17,10 @@ app.use(express.static("public"));
 app.use(cookieParser());
 
 export { app };
+
+/* 
+express.json: Parses the request body if it’s JSON and ensures the size doesn’t exceed 16 KB.
+express.urlencoded: Parses URL-encoded form data if present, ensuring the payload size stays within 16 KB.
+express.static: Checks if the requested resource is a static file in the public directory. If yes, it serves the file and skips the next middleware.
+cookieParser: Parses cookies from the request and attaches them to req.cookies.
+*/
