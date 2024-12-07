@@ -1,5 +1,6 @@
 // require("dotenv").config({ path: "./env" }); // this makes code ugly lookwise so we can modify the
 
+import { app } from "./app.js";
 import connectDB from "./db/db.js";
 import dotenv from "dotenv";
 
