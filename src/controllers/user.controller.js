@@ -4,6 +4,24 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { cloudinaryUploadFile } from "../utils/Cloudinary.js";
 
+const generateAccessandrefreshToken = async (userId) => {
+  try {
+    const user = await User.findeById(userId);
+    const accesToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
+
+    return { accesToken, refreshToken };
+  } catch (error) {
+    throw new ApiError(
+      500,
+      "Something went wrong while generating refresh and access token"
+    );
+  }
+};
+
 const registerUser = asyncHandler(async (req, res) => {
   //get user details from FE
   //Validatiom - not empty
@@ -25,16 +43,27 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 
   //finde from db
-  const existedUser = User.findOne({
+  const existedUser = await User.findOne({
     $or: [{ userName }, { email }],
   });
 
   if (existedUser) {
-    throw ApiError(409, "User with email or username already exists");
+    throw new ApiError(409, "User with email or username already exists");
   }
 
+  // console.log(req.files);
   const avatarlocalPath = req.files?.avatar[0]?.path;
-  const coverImagelocalPath = req.files?.coverImage[0]?.path;
+  // const coverImagelocalPath = req.files?.coverImage[0]?.path; will apply another way to handle file
+
+  let coverImagelocalPath;
+
+  if (
+    req.files &&
+    Array.isArray(req.files.coverImage) &&
+    req.files.coverImage.length > 0
+  ) {
+    coverImagelocalPath = req.files.coverImage[0].path;
+  }
 
   if (!avatarlocalPath) {
     throw new ApiError(400, "Avtar file is required");
@@ -61,8 +90,19 @@ const registerUser = asyncHandler(async (req, res) => {
   const createdUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
+  /* 
+  .select(
+      "-password -refreshToken"
+    )
+  Purpose: Specifies which fields to include or exclude in the returned document.
+  Key Points:
+  "-password": Excludes the password field.
+  "-refreshToken": Excludes the refreshToken field.
+  Fields with - are excluded; fields without - are included.
+  */
+
   if (!createdUser) {
-    throw ApiError(500, "Something went wrong while registering user");
+    throw new ApiError(500, "Something went wrong while registering user");
   }
 
   return res
@@ -70,4 +110,63 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, createdUser, "User registered successfully"));
 });
 
-export { registerUser };
+const loginUser = async (req, res) => {
+  //req body -> data
+  //userName or email
+  //find the user
+  //password check
+  //access and refresh token generate
+  //send cookies
+  //send response
+
+  const { email, userName, password } = req.body;
+
+  if (!userName || !email) {
+    throw new ApiError(400, "uername or email required");
+  }
+
+  const user = await User.findOne({
+    $or: [{ userName }, { email }],
+  });
+
+  if (!user) {
+    throw new ApiError(404, "User does not exist");
+  }
+
+  const isPasswordValid = await user.isPasswordCorrect(password);
+
+  if (!isPasswordValid) {
+    throw new ApiError(404, "Invalid User Credentials");
+  }
+
+  const { accesToken, refreshToken } = generateAccessandrefreshToken(user._id);
+
+  const loggedInUser = await User.findeById(user._id).select(
+    "-password -refreshToken"
+  );
+  // To avoid change cookies by Front end , server can only edit cookies
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .cookie("accessToken", accesToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accesToken,
+          refreshToken,
+        },
+        "User Logged In Successfully"
+      )
+    );
+};
+
+const logoutUser = asyncHandler(async (req, res) => {});
+
+export { registerUser, loginUser };
