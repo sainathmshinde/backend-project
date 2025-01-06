@@ -6,14 +6,16 @@ import { cloudinaryUploadFile } from "../utils/Cloudinary.js";
 
 const generateAccessandrefreshToken = async (userId) => {
   try {
-    const user = await User.findeById(userId);
-    const accesToken = user.generateAccessToken();
+    const user = await User.findById(userId);
+    const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
+
+    console.log("access", user.generateAccessToken());
 
     user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
 
-    return { accesToken, refreshToken };
+    return { accessToken, refreshToken };
   } catch (error) {
     throw new ApiError(
       500,
@@ -119,52 +121,66 @@ const loginUser = async (req, res) => {
   //send cookies
   //send response
 
-  const { email, userName, password } = req.body;
+  try {
+    const { email, userName, password } = req.body;
 
-  if (!userName || !email) {
-    throw new ApiError(400, "uername or email required");
-  }
+    // if (!(userName || email)) {
+    //   throw new ApiError(400, "uername or email required");
+    // }
 
-  const user = await User.findOne({
-    $or: [{ userName }, { email }],
-  });
+    // alternative if both required
 
-  if (!user) {
-    throw new ApiError(404, "User does not exist");
-  }
+    if (!userName && !email) {
+      throw new ApiError(400, "uername or email required");
+    }
 
-  const isPasswordValid = await user.isPasswordCorrect(password);
+    const user = await User.findOne({
+      $or: [{ userName }, { email }],
+    });
 
-  if (!isPasswordValid) {
-    throw new ApiError(404, "Invalid User Credentials");
-  }
+    if (!user) {
+      throw new ApiError(404, "User does not exist");
+    }
 
-  const { accesToken, refreshToken } = generateAccessandrefreshToken(user._id);
+    const isPasswordValid = await user.isPasswordCorrect(password);
 
-  const loggedInUser = await User.findeById(user._id).select(
-    "-password -refreshToken"
-  );
-  // To avoid change cookies by Front end , server can only edit cookies
-  const options = {
-    httpOnly: true,
-    secure: true,
-  };
+    if (!isPasswordValid) {
+      throw new ApiError(404, "Invalid User Credentials");
+    }
 
-  return res
-    .status(200)
-    .cookie("accessToken", accesToken, options)
-    .cookie("refreshToken", refreshToken, options)
-    .json(
-      new ApiResponse(
-        200,
-        {
-          user: loggedInUser,
-          accesToken,
-          refreshToken,
-        },
-        "User Logged In Successfully"
-      )
+    const { accessToken, refreshToken } = await generateAccessandrefreshToken(
+      user._id
     );
+
+    const loggedInUser = await User.findById(user._id).select(
+      "-password -refreshToken"
+    );
+    // To avoid change cookies by Front end , server can only edit cookies
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", refreshToken, options)
+      .json(
+        new ApiResponse(
+          200,
+          {
+            user: loggedInUser,
+            accessToken,
+            refreshToken,
+          },
+          "User Logged In Successfully"
+        )
+      );
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      message: error.message || "Something went wrong",
+    });
+  }
 };
 
 const logoutUser = asyncHandler(async (req, res) => {
@@ -186,9 +202,9 @@ const logoutUser = asyncHandler(async (req, res) => {
   };
   return res
     .status(200)
-    .clearCookie("accesToken", options)
+    .clearCookie("accessToken", options)
     .clearCookie("refreshToken", options)
-    .json(new ApiResponse(200, "User Logout Successfully"));
+    .json(new ApiResponse(200, {}, "User Logedout Successfully"));
 });
 
 export { registerUser, loginUser, logoutUser };
